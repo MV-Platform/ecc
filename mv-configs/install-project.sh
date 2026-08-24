@@ -7,19 +7,26 @@ ECC_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 STACK="${1:-}"
 if [[ -z "$STACK" ]]; then
-  printf 'Usage: %s <stack> [--dry-run]\n' "$0" >&2
+  printf 'Usage: %s <stack> [--target=claude|codex] [--dry-run]\n' "$0" >&2
   exit 2
 fi
 shift
 
 DRY_RUN=false
+TARGET="claude"
 for arg in "$@"; do
   case "$arg" in
     --dry-run)
       DRY_RUN=true
       ;;
+    --target=claude)
+      TARGET="claude"
+      ;;
+    --target=codex)
+      TARGET="codex"
+      ;;
     *)
-      printf 'Usage: %s <stack> [--dry-run]\n' "$0" >&2
+      printf 'Usage: %s <stack> [--target=claude|codex] [--dry-run]\n' "$0" >&2
       exit 2
       ;;
   esac
@@ -149,12 +156,25 @@ for skill in "${SKILLS[@]}"; do
 done
 
 PROJECT_ROOT="$PWD"
-CLAUDE_ROOT="$PROJECT_ROOT/.claude"
-RULES_TARGET_ROOT="$CLAUDE_ROOT/rules/ecc"
-SKILLS_TARGET_ROOT="$CLAUDE_ROOT/skills"
+
+case "$TARGET" in
+  claude)
+    HARNESS_NAME="Claude"
+    RULES_TARGET_ROOT="$PROJECT_ROOT/.claude/rules/ecc"
+    SKILLS_TARGET_ROOT="$PROJECT_ROOT/.claude/skills"
+    ;;
+  codex)
+    HARNESS_NAME="Codex"
+    RULES_TARGET_ROOT="$PROJECT_ROOT/.agents/rules/ecc"
+    SKILLS_TARGET_ROOT="$PROJECT_ROOT/.agents/skills"
+    AGENTS_TARGET="$PROJECT_ROOT/AGENTS.md"
+    # shellcheck source=lib/managed-markdown.sh
+    source "$SCRIPT_DIR/lib/managed-markdown.sh"
+    ;;
+esac
 
 if [[ "$DRY_RUN" == true ]]; then
-  printf '%s project direct-copy plan (dry-run; no files copied)\n' "$STACK_NAME"
+  printf '%s %s project direct-copy plan (dry-run; no files copied)\n' "$STACK_NAME" "$HARNESS_NAME"
   printf 'Project root: %s\n' "$PROJECT_ROOT"
   printf 'Rules:\n'
   for rule_pack in "${RULE_PACKS[@]}"; do
@@ -164,6 +184,10 @@ if [[ "$DRY_RUN" == true ]]; then
   for skill in "${SKILLS[@]}"; do
     printf '  %s -> %s/%s\n' "$ECC_ROOT/skills/$skill" "$SKILLS_TARGET_ROOT" "$skill"
   done
+  if [[ "$TARGET" == "codex" ]]; then
+    printf 'Compiled rules:\n'
+    printf '  %s -> %s (managed block)\n' "$RULES_TARGET_ROOT" "$AGENTS_TARGET"
+  fi
   exit 0
 fi
 
@@ -183,7 +207,20 @@ for skill in "${SKILLS[@]}"; do
   cp -R "$source_dir/." "$target_dir/"
 done
 
-printf '%s project direct copy complete\n' "$STACK_NAME"
+if [[ "$TARGET" == "codex" ]]; then
+  COMPILED_RULES="$(mktemp "${TMPDIR:-/tmp}/mv-codex-project-rules.XXXXXX")"
+  mv_compile_markdown_rules \
+    "$COMPILED_RULES" \
+    "MV-Platform Project Rules" \
+    "$RULES_TARGET_ROOT"
+  mv_replace_markdown_block "$AGENTS_TARGET" "ecc-project-rules" "$COMPILED_RULES"
+  rm -f "$COMPILED_RULES"
+fi
+
+printf '%s %s project direct copy complete\n' "$STACK_NAME" "$HARNESS_NAME"
 printf 'Project root: %s\n' "$PROJECT_ROOT"
 printf 'Installed rule packs: %s\n' "${RULE_PACKS[*]}"
 printf 'Installed skills: %s\n' "${SKILLS[*]}"
+if [[ "$TARGET" == "codex" ]]; then
+  printf 'Compiled project rules: %s\n' "$AGENTS_TARGET"
+fi

@@ -1,6 +1,6 @@
 {
   "name": "ecc-universal",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Harness-native agent operating system for Codex, OpenCode, Cursor, Gemini, Claude Code, and terminal workflows - skills, hooks, rules, MCP conventions, and operator control-plane patterns",
   "publishConfig": {
     "access": "public"
@@ -40,6 +40,7 @@
     "url": "https://github.com/affaan-m/ECC/issues"
   },
   "files": [
+    ".adal/",
     ".agents/",
     ".claude-plugin/",
     ".codex/",
@@ -75,6 +76,7 @@
     "docs/pt-BR/",
     "docs/ru/",
     "docs/tr/",
+    "docs/uk-UA/",
     "docs/vi-VN/",
     "docs/zh-CN/",
     "docs/zh-TW/",
@@ -317,6 +319,7 @@
     "skills/security-scan/",
     "skills/seo/",
     "skills/skill-scout/",
+    "skills/skill-comply/",
     "skills/skill-stocktake/",
     "skills/social-graph-ranker/",
     "skills/springboot-patterns/",
@@ -477,7 +480,7 @@
     "@iarna/toml": "2.2.5",
     "ajv": "8.20.0",
     "js-yaml": "4.3.1",
-    "sql.js": "1.14.1"
+    "sql.js": "1.14.2"
   },
   "pi": {
     "extensions": [
@@ -492,26 +495,28 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
-    "@opencode-ai/plugin": "1.17.3",
-    "@types/node": "26.1.2",
+    "@opencode-ai/plugin": "1.18.25",
+    "@types/node": "26.4.0",
     "c8": "11.0.0",
-    "eslint": "10.6.0",
-    "globals": "17.4.0",
-    "markdownlint-cli": "0.48.0",
+    "eslint": "10.9.1",
+    "globals": "17.11.0",
+    "markdownlint-cli": "0.49.1",
     "typescript": "6.0.3"
   },
   "engines": {
     "node": ">=18"
   },
   "overrides": {
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.7",
     "markdown-it": "14.3.0",
-    "js-yaml": "4.3.1"
+    "js-yaml": "4.3.1",
+    "@humanfs/node": "0.16.8"
   },
   "resolutions": {
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.7",
     "markdown-it": "14.3.0",
-    "js-yaml": "4.3.1"
+    "js-yaml": "4.3.1",
+    "@humanfs/node": "0.16.8"
   },
   "packageManager": "yarn@4.9.2+sha512.1fc009bc09d13cfd0e19efa44cbfc2b9cf6ca61482725eb35bbc5e257e093ebf4130db6dfe15d604ff4b79efd8e1e8e99b25fa7d0a6197c9f9826358d4d65c3c"
 }

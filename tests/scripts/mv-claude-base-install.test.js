@@ -112,6 +112,28 @@ if (test('explicit hook opt-in installs the automatic hook runtime', () => {
   }
 })) passed += 1; else failed += 1;
 
+if (test('default reinstall preserves a previously enabled hook decision', () => {
+  const homeDir = createTempHome();
+  try {
+    const enabledResult = runInstaller(homeDir, ['--enable-hooks']);
+    assert.strictEqual(enabledResult.status, 0, enabledResult.stderr || enabledResult.stdout);
+
+    const reinstallResult = runInstaller(homeDir);
+    assert.strictEqual(
+      reinstallResult.status,
+      0,
+      reinstallResult.stderr || reinstallResult.stdout
+    );
+
+    const state = readInstallState(homeDir);
+    assert.strictEqual(state.request.hookConsent, 'enabled');
+    assert.ok(state.resolution.selectedModules.includes('hooks-runtime'));
+    assert.ok(fs.existsSync(path.join(homeDir, '.claude', 'hooks', 'hooks.json')));
+  } finally {
+    fs.rmSync(homeDir, { recursive: true, force: true });
+  }
+})) passed += 1; else failed += 1;
+
 console.log(`\nPassed: ${passed}`);
 console.log(`Failed: ${failed}`);
 process.exit(failed > 0 ? 1 : 0);

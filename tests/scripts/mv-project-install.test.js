@@ -230,6 +230,68 @@ for (const [stack, expected] of Object.entries(stacks)) {
   }
 }
 
+if (test('malformed Codex project markers fail before copying any files', () => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mv-malformed-project-'));
+  const agentsPath = path.join(projectDir, 'AGENTS.md');
+  const malformedAgents = `${userAgents}\n${managedStart}\nold body\n`;
+  try {
+    fs.writeFileSync(agentsPath, malformedAgents);
+
+    const result = runWrapper(projectDir, 'react-vite', 'codex');
+    assert.notStrictEqual(result.status, 0);
+    assert.ok(result.stderr.includes('Error: malformed MV-Platform block'));
+    assert.strictEqual(fs.readFileSync(agentsPath, 'utf8'), malformedAgents);
+    assert.ok(!fs.existsSync(path.join(projectDir, '.agents')));
+  } finally {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  }
+})) passed += 1; else failed += 1;
+
+for (const harness of ['claude', 'codex']) {
+  if (test(`${harness} rejects a symlinked harness directory`, () => {
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), `mv-${harness}-symlink-`));
+    const externalDir = fs.mkdtempSync(path.join(os.tmpdir(), `mv-${harness}-outside-`));
+    const harnessDirectory = harness === 'codex' ? '.agents' : '.claude';
+    try {
+      fs.writeFileSync(path.join(projectDir, 'AGENTS.md'), userAgents);
+      fs.symlinkSync(
+        externalDir,
+        path.join(projectDir, harnessDirectory),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      );
+
+      const result = runWrapper(projectDir, 'react-vite', harness);
+      assert.notStrictEqual(result.status, 0);
+      assert.deepStrictEqual(fs.readdirSync(externalDir), []);
+      assert.strictEqual(
+        fs.readFileSync(path.join(projectDir, 'AGENTS.md'), 'utf8'),
+        userAgents
+      );
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+      fs.rmSync(externalDir, { recursive: true, force: true });
+    }
+  })) passed += 1; else failed += 1;
+}
+
+if (test('Codex rejects a symlinked AGENTS.md without changing its referent', () => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mv-agents-symlink-'));
+  const externalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mv-agents-outside-'));
+  const externalAgents = path.join(externalDir, 'AGENTS.md');
+  try {
+    fs.writeFileSync(externalAgents, userAgents);
+    fs.symlinkSync(externalAgents, path.join(projectDir, 'AGENTS.md'), 'file');
+
+    const result = runWrapper(projectDir, 'react-vite', 'codex');
+    assert.notStrictEqual(result.status, 0);
+    assert.strictEqual(fs.readFileSync(externalAgents, 'utf8'), userAgents);
+    assert.ok(!fs.existsSync(path.join(projectDir, '.agents')));
+  } finally {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+    fs.rmSync(externalDir, { recursive: true, force: true });
+  }
+})) passed += 1; else failed += 1;
+
 console.log(`\nPassed: ${passed}`);
 console.log(`Failed: ${failed}`);
 process.exit(failed > 0 ? 1 : 0);

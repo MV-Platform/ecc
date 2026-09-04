@@ -57,6 +57,26 @@ function readInstallState(homeDir) {
   return JSON.parse(fs.readFileSync(statePath, 'utf8'));
 }
 
+function directorySnapshot(directory) {
+  const snapshot = [];
+
+  function visit(currentDirectory) {
+    for (const entry of fs.readdirSync(currentDirectory, { withFileTypes: true })) {
+      const entryPath = path.join(currentDirectory, entry.name);
+      const relativePath = path.relative(directory, entryPath).split(path.sep).join('/');
+      if (entry.isDirectory()) {
+        snapshot.push(`${relativePath}/`);
+        visit(entryPath);
+      } else if (entry.isFile()) {
+        snapshot.push(`${relativePath}:${fs.readFileSync(entryPath).toString('base64')}`);
+      }
+    }
+  }
+
+  visit(directory);
+  return snapshot.sort();
+}
+
 function assertBaseFiles(homeDir) {
   const claudeRoot = path.join(homeDir, '.claude');
   for (const skill of baseSkills) {
@@ -91,6 +111,23 @@ if (test('default install succeeds without enabling automatic hooks', () => {
     assert.ok(!state.resolution.selectedModules.includes('hooks-runtime'));
     assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'hooks', 'hooks.json')));
     assertBaseFiles(homeDir);
+  } finally {
+    fs.rmSync(homeDir, { recursive: true, force: true });
+  }
+})) passed += 1; else failed += 1;
+
+if (test('default reinstall preserves a previously declined hook decision', () => {
+  const homeDir = createTempHome();
+  try {
+    const firstResult = runInstaller(homeDir);
+    assert.strictEqual(firstResult.status, 0, firstResult.stderr || firstResult.stdout);
+    const secondResult = runInstaller(homeDir);
+    assert.strictEqual(secondResult.status, 0, secondResult.stderr || secondResult.stdout);
+
+    const state = readInstallState(homeDir);
+    assert.strictEqual(state.request.hookConsent, 'declined');
+    assert.ok(!state.resolution.selectedModules.includes('hooks-runtime'));
+    assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'hooks', 'hooks.json')));
   } finally {
     fs.rmSync(homeDir, { recursive: true, force: true });
   }
@@ -131,6 +168,90 @@ if (test('default reinstall preserves a previously enabled hook decision', () =>
     assert.ok(fs.existsSync(path.join(homeDir, '.claude', 'hooks', 'hooks.json')));
   } finally {
     fs.rmSync(homeDir, { recursive: true, force: true });
+  }
+})) passed += 1; else failed += 1;
+
+if (test('explicit hook disable refuses to orphan a previously managed runtime', () => {
+  const homeDir = createTempHome();
+  try {
+    const enabledResult = runInstaller(homeDir, ['--enable-hooks']);
+    assert.strictEqual(enabledResult.status, 0, enabledResult.stderr || enabledResult.stdout);
+    const statePath = path.join(homeDir, '.claude', 'ecc', 'install-state.json');
+    const hooksPath = path.join(homeDir, '.claude', 'hooks');
+    const stateBeforeDisable = fs.readFileSync(statePath);
+    const hooksBeforeDisable = directorySnapshot(hooksPath);
+
+    const disableResult = runInstaller(homeDir, ['--no-hooks']);
+    assert.strictEqual(disableResult.status, 1);
+    assert.ok(disableResult.stderr.includes('cannot safely remove'));
+    assert.ok(disableResult.stderr.includes('ECC uninstaller'));
+
+    const state = readInstallState(homeDir);
+    assert.strictEqual(state.request.hookConsent, 'enabled');
+    assert.ok(state.resolution.selectedModules.includes('hooks-runtime'));
+    assert.ok(fs.existsSync(path.join(homeDir, '.claude', 'hooks', 'hooks.json')));
+    assert.deepStrictEqual(fs.readFileSync(statePath), stateBeforeDisable);
+    assert.deepStrictEqual(directorySnapshot(hooksPath), hooksBeforeDisable);
+  } finally {
+    fs.rmSync(homeDir, { recursive: true, force: true });
+  }
+})) passed += 1; else failed += 1;
+
+if (test('base install rejects a hard-linked managed skill without changing its external inode', () => {
+  if (process.platform === 'win32') return;
+
+  const homeDir = createTempHome();
+  const externalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mv-claude-hardlink-'));
+  const externalFile = path.join(externalDir, 'external.md');
+  const targetFile = path.join(
+    homeDir,
+    '.claude',
+    'skills',
+    'coding-standards',
+    'SKILL.md'
+  );
+  const externalContent = 'external Claude content must remain unchanged\n';
+  try {
+    fs.writeFileSync(externalFile, externalContent);
+    fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+    fs.linkSync(externalFile, targetFile);
+
+    const result = runInstaller(homeDir);
+    assert.notStrictEqual(result.status, 0);
+    assert.ok(result.stderr.includes('hard link'), result.stderr || result.stdout);
+    assert.ok(result.stderr.includes(targetFile), result.stderr || result.stdout);
+    assert.strictEqual(fs.readFileSync(externalFile, 'utf8'), externalContent);
+    assert.strictEqual(fs.statSync(externalFile).nlink, 2);
+    assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'ecc', 'install-state.json')));
+  } finally {
+    fs.rmSync(homeDir, { recursive: true, force: true });
+    fs.rmSync(externalDir, { recursive: true, force: true });
+  }
+})) passed += 1; else failed += 1;
+
+if (test('base install rejects a hard-linked upstream core agent destination', () => {
+  if (process.platform === 'win32') return;
+
+  const homeDir = createTempHome();
+  const externalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mv-claude-core-hardlink-'));
+  const externalFile = path.join(externalDir, 'external.md');
+  const targetFile = path.join(homeDir, '.claude', 'agents', 'planner.md');
+  const externalContent = 'external Claude agent content must remain unchanged\n';
+  try {
+    fs.writeFileSync(externalFile, externalContent);
+    fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+    fs.linkSync(externalFile, targetFile);
+
+    const result = runInstaller(homeDir);
+    assert.notStrictEqual(result.status, 0);
+    assert.ok(result.stderr.includes('hard link'), result.stderr || result.stdout);
+    assert.ok(result.stderr.includes(targetFile), result.stderr || result.stdout);
+    assert.strictEqual(fs.readFileSync(externalFile, 'utf8'), externalContent);
+    assert.strictEqual(fs.statSync(externalFile).nlink, 2);
+    assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'ecc', 'install-state.json')));
+  } finally {
+    fs.rmSync(homeDir, { recursive: true, force: true });
+    fs.rmSync(externalDir, { recursive: true, force: true });
   }
 })) passed += 1; else failed += 1;
 

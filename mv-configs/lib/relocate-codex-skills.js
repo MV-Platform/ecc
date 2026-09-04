@@ -5,11 +5,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const [statePath, legacySkillsRoot, userSkillsRoot, ...additionalSkillNames] = process.argv.slice(2);
+const { assertSafeInstallPath } = require('./assert-safe-install-paths');
 
-if (!statePath || !legacySkillsRoot || !userSkillsRoot) {
+const [trustedRoot, statePath, legacySkillsRoot, userSkillsRoot, ...additionalSkillNames] = process.argv.slice(2);
+
+if (!trustedRoot || !statePath || !legacySkillsRoot || !userSkillsRoot) {
   process.stderr.write(
-    'Usage: relocate-codex-skills.js <install-state> <legacy-skills-root> <user-skills-root> [additional-skill-name]...\n'
+    'Usage: relocate-codex-skills.js <trusted-root> <install-state> <legacy-skills-root> <user-skills-root> [additional-skill-name]...\n'
   );
   process.exit(2);
 }
@@ -61,6 +63,15 @@ for (const operation of state.operations) {
 
 if (managedSkillNames.size === 0) {
   process.stderr.write('Error: no managed Codex skills found to relocate.\n');
+  process.exit(1);
+}
+
+try {
+  for (const skillName of managedSkillNames) {
+    assertSafeInstallPath(trustedRoot, path.join(resolvedUserRoot, skillName));
+  }
+} catch (error) {
+  process.stderr.write(`Error: ${error.message}\n`);
   process.exit(1);
 }
 

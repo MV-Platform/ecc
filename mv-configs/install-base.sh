@@ -6,18 +6,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ECC_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 DRY_RUN=false
+ENABLE_HOOKS=false
+NO_HOOKS=false
 
 for arg in "$@"; do
   case "$arg" in
     --dry-run)
       DRY_RUN=true
       ;;
+    --enable-hooks)
+      ENABLE_HOOKS=true
+      ;;
+    --no-hooks)
+      NO_HOOKS=true
+      ;;
     *)
-      printf 'Usage: %s [--dry-run]\n' "$0" >&2
+      printf 'Usage: %s [--dry-run] [--enable-hooks|--no-hooks]\n' "$0" >&2
       exit 2
       ;;
   esac
 done
+
+if [[ "$ENABLE_HOOKS" == true && "$NO_HOOKS" == true ]]; then
+  printf 'Error: --enable-hooks and --no-hooks are mutually exclusive.\n' >&2
+  exit 2
+fi
 
 if [[ -z "${HOME:-}" ]]; then
   printf 'Error: HOME is not set.\n' >&2
@@ -58,8 +71,45 @@ INSTALL_ARGS=(
   --target claude
 )
 
+CLAUDE_INSTALL_STATE="$HOME/.claude/ecc/install-state.json"
+RECORDED_HOOK_CONSENT="$(
+  node "$SCRIPT_DIR/lib/resolve-claude-hook-consent.js" "$CLAUDE_INSTALL_STATE"
+)"
+
+if [[ "$NO_HOOKS" == true && "$RECORDED_HOOK_CONSENT" == "enabled" ]]; then
+  printf '%s\n' \
+    'Error: --no-hooks cannot safely remove a previously managed hook runtime.' \
+    'Run the ECC uninstaller for the Claude target, then reinstall Base without hooks.' >&2
+  exit 1
+fi
+
+if [[ "$ENABLE_HOOKS" == true || "$RECORDED_HOOK_CONSENT" == "enabled" ]]; then
+  INSTALL_ARGS+=(--enable-hooks)
+else
+  INSTALL_ARGS+=(--no-hooks)
+fi
+
 if [[ "$DRY_RUN" == true ]]; then
   INSTALL_ARGS+=(--dry-run)
+fi
+
+SAFE_TARGETS=(
+  "$HOME/.claude/ecc/install-state.json"
+  "$HOME/.claude/hooks"
+  "$HOME/.claude/rules/ecc/common"
+  "$HOME/.claude/rules/mv/git-commit-rules.md"
+)
+for skill in "${BASE_SKILLS[@]}"; do
+  SAFE_TARGETS+=("$HOME/.claude/skills/$skill")
+done
+
+node "$SCRIPT_DIR/lib/assert-safe-install-paths.js" \
+  "$HOME" \
+  "${SAFE_TARGETS[@]}"
+
+if [[ "$DRY_RUN" == false ]]; then
+  "$ECC_ROOT/install.sh" "${INSTALL_ARGS[@]}" --dry-run --json \
+    | node "$SCRIPT_DIR/lib/assert-safe-install-plan.js" "$HOME"
 fi
 
 "$ECC_ROOT/install.sh" "${INSTALL_ARGS[@]}"

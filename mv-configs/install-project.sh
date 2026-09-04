@@ -191,6 +191,25 @@ if [[ "$DRY_RUN" == true ]]; then
   exit 0
 fi
 
+SAFE_TARGETS=()
+for rule_pack in "${RULE_PACKS[@]}"; do
+  SAFE_TARGETS+=("$RULES_TARGET_ROOT/$rule_pack")
+done
+for skill in "${SKILLS[@]}"; do
+  SAFE_TARGETS+=("$SKILLS_TARGET_ROOT/$skill")
+done
+if [[ "$TARGET" == "codex" ]]; then
+  SAFE_TARGETS+=("$AGENTS_TARGET")
+fi
+
+node "$SCRIPT_DIR/lib/assert-safe-install-paths.js" \
+  "$PROJECT_ROOT" \
+  "${SAFE_TARGETS[@]}"
+
+if [[ "$TARGET" == "codex" ]]; then
+  mv_validate_markdown_block "$AGENTS_TARGET" "ecc-project-rules"
+fi
+
 mkdir -p "$RULES_TARGET_ROOT" "$SKILLS_TARGET_ROOT"
 
 for rule_pack in "${RULE_PACKS[@]}"; do
@@ -208,13 +227,11 @@ for skill in "${SKILLS[@]}"; do
 done
 
 if [[ "$TARGET" == "codex" ]]; then
-  COMPILED_RULES="$(mktemp "${TMPDIR:-/tmp}/mv-codex-project-rules.XXXXXX")"
-  mv_compile_markdown_rules \
-    "$COMPILED_RULES" \
+  mv_compile_and_replace_markdown_block \
+    "$AGENTS_TARGET" \
+    "ecc-project-rules" \
     "MV-Platform Project Rules" \
     "$RULES_TARGET_ROOT"
-  mv_replace_markdown_block "$AGENTS_TARGET" "ecc-project-rules" "$COMPILED_RULES"
-  rm -f "$COMPILED_RULES"
 fi
 
 printf '%s %s project direct copy complete\n' "$STACK_NAME" "$HARNESS_NAME"

@@ -145,6 +145,14 @@ function assertCopiedDirectory(source, target) {
   );
 }
 
+function installedSnapshot(projectDir, harness) {
+  const harnessRoot = harness === 'codex' ? '.agents' : '.claude';
+  return {
+    harnessFiles: directoryDigest(path.join(projectDir, harnessRoot)),
+    agentsContent: fs.readFileSync(path.join(projectDir, 'AGENTS.md'), 'utf8'),
+  };
+}
+
 function runWrapper(projectDir, stack, harness) {
   const suffix = harness === 'codex' ? '-codex' : '';
   const script = path.join(mvRoot, `install-${stack}${suffix}.sh`);
@@ -219,10 +227,15 @@ for (const [stack, expected] of Object.entries(stacks)) {
         const firstResult = runWrapper(projectDir, stack, harness);
         assert.strictEqual(firstResult.status, 0, firstResult.stderr || firstResult.stdout);
         verifyStack(projectDir, stack, harness, expected);
+        const firstSnapshot = installedSnapshot(projectDir, harness);
 
         const secondResult = runWrapper(projectDir, stack, harness);
         assert.strictEqual(secondResult.status, 0, secondResult.stderr || secondResult.stdout);
         verifyStack(projectDir, stack, harness, expected);
+        assert.deepStrictEqual(installedSnapshot(projectDir, harness), firstSnapshot);
+        if (harness === 'claude') {
+          assert.strictEqual(firstSnapshot.agentsContent, userAgents);
+        }
       } finally {
         fs.rmSync(projectDir, { recursive: true, force: true });
       }
@@ -291,6 +304,78 @@ if (test('Codex rejects a symlinked AGENTS.md without changing its referent', ()
     fs.rmSync(externalDir, { recursive: true, force: true });
   }
 })) passed += 1; else failed += 1;
+
+if (test('Codex rejects a symlink inside an existing managed skill directory', () => {
+  if (process.platform === 'win32') return;
+
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mv-skill-symlink-'));
+  const externalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mv-skill-outside-'));
+  const externalSkill = path.join(externalDir, 'SKILL.md');
+  const skillDir = path.join(projectDir, '.agents', 'skills', 'frontend-patterns');
+  try {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(projectDir, 'AGENTS.md'), userAgents);
+    fs.writeFileSync(externalSkill, 'external skill content\n');
+    fs.symlinkSync(externalSkill, path.join(skillDir, 'SKILL.md'), 'file');
+
+    const result = runWrapper(projectDir, 'react-vite', 'codex');
+    assert.notStrictEqual(result.status, 0);
+    assert.strictEqual(fs.readFileSync(externalSkill, 'utf8'), 'external skill content\n');
+    assert.ok(!fs.existsSync(path.join(projectDir, '.agents', 'rules')));
+  } finally {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+    fs.rmSync(externalDir, { recursive: true, force: true });
+  }
+})) passed += 1; else failed += 1;
+
+const hardLinkCases = [
+  {
+    name: 'Claude managed skill file',
+    harness: 'claude',
+    relativePath: ['.claude', 'skills', 'frontend-patterns', 'SKILL.md'],
+  },
+  {
+    name: 'Codex managed skill file',
+    harness: 'codex',
+    relativePath: ['.agents', 'skills', 'frontend-patterns', 'SKILL.md'],
+  },
+  {
+    name: 'Codex managed rule file',
+    harness: 'codex',
+    relativePath: ['.agents', 'rules', 'ecc', 'common', 'security.md'],
+  },
+];
+
+for (const hardLinkCase of hardLinkCases) {
+  if (test(`${hardLinkCase.name} hard link is rejected without changing its external inode`, () => {
+    if (process.platform === 'win32') return;
+
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mv-hardlink-project-'));
+    const externalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mv-hardlink-outside-'));
+    const externalFile = path.join(externalDir, 'external.md');
+    const targetFile = path.join(projectDir, ...hardLinkCase.relativePath);
+    const externalContent = 'external content must remain unchanged\n';
+    try {
+      fs.writeFileSync(path.join(projectDir, 'AGENTS.md'), userAgents);
+      fs.writeFileSync(externalFile, externalContent);
+      fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+      fs.linkSync(externalFile, targetFile);
+
+      const result = runWrapper(projectDir, 'react-vite', hardLinkCase.harness);
+      assert.notStrictEqual(result.status, 0);
+      assert.ok(result.stderr.includes('hard link'), result.stderr || result.stdout);
+      assert.strictEqual(fs.readFileSync(externalFile, 'utf8'), externalContent);
+      assert.strictEqual(fs.statSync(externalFile).nlink, 2);
+      assert.strictEqual(
+        fs.readFileSync(path.join(projectDir, 'AGENTS.md'), 'utf8'),
+        userAgents
+      );
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+      fs.rmSync(externalDir, { recursive: true, force: true });
+    }
+  })) passed += 1; else failed += 1;
+}
 
 console.log(`\nPassed: ${passed}`);
 console.log(`Failed: ${failed}`);

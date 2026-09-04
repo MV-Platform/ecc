@@ -46,13 +46,7 @@ find "$HOME/.agents/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l
 
 ## 프로젝트 스택
 
-공식 빠른 설치 명령은 Claude Code에 `ecc@ecc` 전체 플러그인을 설치한다.
-
-```bash
-npx ecc-universal setup
-```
-
-전체 플러그인은 286개 스킬을 모두 노출하므로 컨텍스트를 작게 유지하려는 이 가이드에서는 사용하지 않는다. 위에서 Base만 설치한 다음, 프로젝트 루트에서 현재 프로젝트에 필요한 스택 래퍼만 실행한다.
+위에서 Base만 설치한 다음, 설치할 프로젝트 루트에서 현재 프로젝트에 필요한 스택 래퍼만 실행한다.
 
 | 스택 | Claude | Codex |
 |---|---|---|

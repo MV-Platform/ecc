@@ -9,6 +9,7 @@ const path = require('path');
 const README = path.join(__dirname, '..', '..', 'README.md');
 const RULES_README = path.join(__dirname, '..', '..', 'rules', 'README.md');
 const CODEX_AGENTS = path.join(__dirname, '..', '..', '.codex', 'AGENTS.md');
+const MV_CONFIGS_README = path.join(__dirname, '..', '..', 'mv-configs', 'README.md');
 
 function test(name, fn) {
   try {
@@ -31,6 +32,43 @@ function runTests() {
   const readme = fs.readFileSync(README, 'utf8');
   const rulesReadme = fs.readFileSync(RULES_README, 'utf8');
   const codexAgents = fs.readFileSync(CODEX_AGENTS, 'utf8');
+  const mvConfigsReadme = fs.readFileSync(MV_CONFIGS_README, 'utf8');
+
+  if (test('MV selective guide keeps the checkout-based stack workflow', () => {
+    assert.ok(
+      !mvConfigsReadme.includes('npx ecc-universal setup'),
+      'MV selective guide must not direct users to the full npm plugin setup'
+    );
+    assert.ok(
+      mvConfigsReadme.includes('위에서 Base만 설치한 다음, 설치할 프로젝트 루트에서 현재 프로젝트에 필요한 스택 래퍼만 실행한다.'),
+      'MV selective guide should retain the project-root wrapper workflow'
+    );
+    for (const command of [
+      'install-react-vite.sh',
+      'install-react-vite-codex.sh',
+      'install-android.sh',
+      'install-android-codex.sh',
+      'install-ios.sh',
+      'install-ios-codex.sh',
+      'install-react-native.sh',
+      'install-react-native-codex.sh',
+      'install-spring-kotlin.sh',
+      'install-spring-kotlin-codex.sh',
+      'install-fastapi.sh',
+      'install-fastapi-codex.sh',
+      'install-django.sh',
+      'install-django-codex.sh',
+      'install-infra.sh',
+      'install-infra-codex.sh',
+    ]) {
+      assert.ok(
+        mvConfigsReadme.includes(command),
+        `MV selective guide should retain the ${command} stack wrapper`
+      );
+    }
+    assert.ok(mvConfigsReadme.includes('| 스택 | Claude | Codex |'));
+    assert.ok(mvConfigsReadme.includes('install-spring-kotlin-codex.sh --dry-run'));
+  })) passed++; else failed++;
 
   if (test('README marks one default path and warns against stacked installs', () => {
     assert.ok(

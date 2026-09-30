@@ -34,6 +34,11 @@ BASE_SKILLS=(
   security-review
   terminal-ops
   github-ops
+  git-workflow
+  error-handling
+  tdd-workflow
+  verification-loop
+  continuous-learning-v2
 )
 
 COMMON_RULE_SOURCE="$ECC_ROOT/rules/common"
@@ -62,12 +67,7 @@ for skill in "${BASE_SKILLS[@]}"; do
   fi
 done
 
-INSTALL_ARGS=(
-  --profile core
-  --without baseline:rules
-  --target codex
-  --no-hooks
-)
+INSTALL_ARGS=(--modules platform-configs --target codex --no-hooks)
 
 if [[ "$DRY_RUN" == true ]]; then
   INSTALL_ARGS+=(--dry-run)
@@ -95,7 +95,7 @@ if [[ "$DRY_RUN" == true ]]; then
   printf '  rules/global/git-commit-rules.md -> %s\n' "$GLOBAL_RULE_TARGET"
   printf '  compiled common/global rules -> %s (managed block)\n' "$AGENTS_TARGET"
   printf '  Codex agent role name/description fields -> normalized in %s\n' "$AGENT_ROLES_TARGET"
-  printf '  upstream Codex skills -> relocated from %s to %s\n' "$LEGACY_SKILLS_ROOT" "$SKILLS_TARGET_ROOT"
+  printf '  existing legacy Codex skills at %s -> preserved\n' "$LEGACY_SKILLS_ROOT"
   printf '  existing %s and %s -> user content preserved\n' "$AGENTS_TARGET" "$CONFIG_TARGET"
   printf '  repository-only Codex supplement -> removed from %s if present\n' "$AGENTS_TARGET"
   for skill in "${BASE_SKILLS[@]}"; do
@@ -199,13 +199,6 @@ node "$SCRIPT_DIR/lib/remove-codex-repo-agents.js" \
   "$CODEX_SUPPLEMENT_SOURCE"
 
 node "$SCRIPT_DIR/lib/normalize-codex-agent-roles.js" "$AGENT_ROLES_TARGET"
-node "$SCRIPT_DIR/lib/relocate-codex-skills.js" \
-  "$HOME" \
-  "$CODEX_ROOT/ecc-install-state.json" \
-  "$LEGACY_SKILLS_ROOT" \
-  "$SKILLS_TARGET_ROOT" \
-  "${BASE_SKILLS[@]}"
-
 mkdir -p "$RULES_TARGET" "$(dirname "$GLOBAL_RULE_TARGET")" "$SKILLS_TARGET_ROOT"
 cp -R "$COMMON_RULE_SOURCE/." "$RULES_TARGET/"
 cp "$GLOBAL_RULE_SOURCE" "$GLOBAL_RULE_TARGET"

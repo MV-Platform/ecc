@@ -14,13 +14,20 @@ metadata:
 - When you want to restrict edits to a specific directory
 - During sensitive operations (migrations, deploys, data changes)
 
-## How It Works
+## Scope
+
+This skill provides review guidance for the modes below. It does not include a
+`/safety-guard` command or a PreToolUse hook that enforces them. Treat directory
+limits as instructions unless a separate, tested enforcement mechanism is
+configured. Do not claim that a command was blocked by this skill.
+
+## How to Use the Guidance
 
 Three modes of protection:
 
 ### Mode 1: Careful Mode
 
-Intercepts destructive commands before execution and warns:
+Review destructive commands before execution and warn about:
 
 ```
 Watched patterns:
@@ -37,40 +44,40 @@ Watched patterns:
 - Any command with --no-verify
 ```
 
-When detected: shows what the command does, asks for confirmation, suggests safer alternative.
+When detected: explain what the command does, ask for confirmation, and suggest
+a safer alternative.
 
 ### Mode 2: Freeze Mode
 
-Locks file edits to a specific directory tree:
+Limit planned file edits to a specific directory tree:
 
 ```
-/safety-guard freeze src/components/
+Apply freeze guidance to src/components/
 ```
 
-Any Write/Edit outside `src/components/` is blocked with an explanation. Useful when you want an agent to focus on one area without touching unrelated code.
+Review each proposed Write/Edit against `src/components/`. A separate hook or
+policy is required to block writes outside that directory automatically.
 
 ### Mode 3: Guard Mode (Careful + Freeze combined)
 
 Both protections active. Maximum safety for autonomous agents.
 
 ```
-/safety-guard guard --dir src/api/ --allow-read-all
+Apply guard guidance to src/api/ while allowing reads elsewhere
 ```
 
-Agents can read anything but only write to `src/api/`. Destructive commands are blocked everywhere.
+Review writes against `src/api/` and review destructive commands everywhere.
+Automatic blocking requires a separate hook or policy.
 
 ### Unlock
 
 ```
-/safety-guard off
+Stop applying the freeze or guard guidance
 ```
 
-## Implementation
+## Enforcement
 
-Uses PreToolUse hooks to intercept Bash, Write, Edit, and MultiEdit tool calls. Checks the command/path against the active rules before allowing execution.
-
-## Integration
-
-- Enable by default for `codex -a never` sessions
-- Pair with observability risk scoring in ECC 2.0
-- Logs all blocked actions to `~/.claude/safety-guard.log`
+The ECC repository does not bundle a PreToolUse hook or slash command for this
+skill. Installing or invoking it does not enable automatic command blocking,
+directory confinement, or a `~/.claude/safety-guard.log` audit log. Configure
+and test those controls separately if required for production work.

@@ -313,14 +313,13 @@
     {
       "id": "workflow-quality",
       "kind": "skills",
-      "description": "Evaluation, TDD, verification, compaction, learning, and cross-harness memory skills, including the legacy continuous-learning v1 path. The unified-memory workflow requires the separately installed ecc-universal CLI runtime.",
+      "description": "Evaluation, TDD, verification, compaction, learning, and cross-harness memory skills. The unified-memory workflow requires the separately installed ecc-universal CLI runtime.",
       "paths": [
         "skills/agent-sort",
         "skills/agent-introspection-debugging",
         "skills/ai-regression-testing",
         "skills/configure-ecc",
         "skills/code-tour",
-        "skills/continuous-learning",
         "skills/continuous-learning-v2",
         "skills/council",
         "skills/council-multi-model",
@@ -384,6 +383,34 @@
       ],
       "defaultInstall": true,
       "cost": "medium",
+      "stability": "stable"
+    },
+    {
+      "id": "workflow-quality-legacy",
+      "kind": "skills",
+      "description": "Opt-in legacy continuous-learning v1 skill for compatibility with older workflows.",
+      "paths": [
+        "skills/continuous-learning"
+      ],
+      "targets": [
+        "claude",
+        "claude-project",
+        "cursor",
+        "antigravity",
+        "codex",
+        "opencode",
+        "codebuddy",
+        "joycode",
+        "qwen",
+        "zed",
+        "hermes",
+        "openclaw",
+        "kimi",
+        "adal"
+      ],
+      "dependencies": [],
+      "defaultInstall": false,
+      "cost": "light",
       "stability": "stable"
     },
     {

@@ -1,15 +1,48 @@
 # MV-Platform ECC 선택 설치
 
-이 디렉터리는 ECC 저장소 루트의 `mv-configs/`에 둔다. 플러그인 전체 설치 대신 Claude와 Codex에 동일한 Base/스택 구성을 선별 설치한다.
+이 디렉터리는 ECC 저장소 루트의 `mv-configs/`에 둔다. 기본 구성은 공통 11개와 8개 역할의 고유 스킬 38개를 합친 **49개 공용 통합 설치**다.
 
-## Claude Base
+## Claude: 유니버설 설치 후 통합 49개
+
+먼저 공식 유니버설 안내형 설치에서 **Global user**, **Hooks off**를 선택한다. 설치 직후 전체 플러그인을 비활성화한다.
+
+```bash
+npx ecc-universal setup
+claude plugin disable ecc@ecc --scope user
+```
+
+이후 통합 스크립트로 49개만 사용자 범위에 설치한다. `ecc@ecc`를 다시 활성화하면 전체 플러그인 스킬이 로드되므로 비활성 상태를 유지한다.
+
+```bash
+./mv-configs/install-unified.sh --dry-run
+./mv-configs/install-unified.sh
+```
+
+첫 실행은 자동 hook runtime을 설치하지 않는다. 공통 규칙만 사용자 범위에 적용하며 스택별 규칙 팩은 설치하지 않는다.
+
+기존 프로젝트에서 플러그인을 local 또는 project 범위로 켰다면 해당 범위도 비활성화한다. 프로젝트별 스킬 복사는 더 이상 필요하지 않다.
+
+## Codex: 통합 49개
+
+Codex의 `ecc@ecc` 플러그인을 사용 중이라면 제거한 뒤 통합 설치한다.
+
+```bash
+./mv-configs/install-unified-codex.sh --dry-run
+./mv-configs/install-unified-codex.sh
+```
+
+Claude는 `~/.claude/skills`, Codex는 `~/.agents/skills`에 49개를 설치한다. `continuous-learning` v1은 제외하고 v2를 포함한다.
+
+## 공통 11개만 선택할 때
+
+통합 설치 대신 공통 스킬만 쓰는 환경에서는 기존 Base 스크립트를 실행할 수 있다.
 
 ```bash
 ./mv-configs/install-base.sh --dry-run
 ./mv-configs/install-base.sh
 ```
 
-첫 실행은 자동 hook runtime을 설치하지 않는다. 재실행은 이전에 명시한 hook 선택을 보존한다. Claude hook까지 사용할 때만 권한 범위를 확인한 뒤 명시적으로 opt-in한다.
+Claude hook까지 사용할 때만 권한 범위를 확인한 뒤 명시적으로 opt-in한다.
 
 ```bash
 ./mv-configs/install-base.sh --enable-hooks --dry-run
@@ -23,7 +56,7 @@ node scripts/uninstall.js --target claude
 ./mv-configs/install-base.sh --no-hooks
 ```
 
-## Codex Base
+### Codex Base
 
 Codex의 `ecc@ecc` 플러그인이 설치되어 있으면 286개 전체가 계속 노출되므로 먼저 제거한다.
 
@@ -34,11 +67,11 @@ codex plugin remove ecc@ecc
 ./mv-configs/install-base-codex.sh
 ```
 
-Codex Base는 공식 `core` 프로필과 MV Base 스킬의 합집합 54개를 Codex의 정식 사용자 스킬 경로인 `~/.agents/skills`에 설치한다. ECC 설치기가 먼저 생성하는 구 경로 `~/.codex/skills`에서는 이 래퍼가 관리하는 스킬만 안전하게 이동·정리한다. 기존 `~/.codex/config.toml`은 변경하지 않으며, 기존 `~/.codex/AGENTS.md`의 사용자 내용도 보존하고 MV 관리 규칙 블록만 추가하거나 갱신한다. 이전 wrapper가 전역 파일에 잘못 복사한 저장소 전용 Codex 지침은 제거하므로 `docs/CODEX-NAVIGATION-GUIDE.md` 누락 오류도 재설치 시 정리된다. ECC 원본에서 누락된 Codex agent role의 필수 `name`과 `description`도 `docs-researcher`, `explorer`, `reviewer`에 자동 보정한다.
+Codex Base는 동일한 공용 스킬 11개를 Codex의 사용자 스킬 경로인 `~/.agents/skills`에 설치한다. 기존 `~/.codex/config.toml`과 `~/.codex/AGENTS.md`의 사용자 내용을 보존하며 MV 관리 규칙 블록만 추가하거나 갱신한다. 이전 wrapper가 전역 파일에 잘못 복사한 저장소 전용 Codex 지침도 정리한다. Codex agent role의 필수 `name`과 `description`은 `docs-researcher`, `explorer`, `reviewer`에 자동 보정한다.
 
 설치 후 Codex를 다시 시작하고 `/skills`를 실행하거나 `$`를 입력하면 선별 설치된 스킬을 확인하고 호출할 수 있다. 수동 셸 설치는 플러그인 설치가 아니므로 `codex plugin list`에는 나타나지 않는다.
 
-이전 wrapper로 이미 설치했다면 새 `mv-configs`로 교체한 뒤 Base를 한 번 더 실행하면 된다. 관리 대상 스킬은 구 경로에서 공식 사용자 경로로 자동 이전된다. 재실행 후 아래 결과가 `54`인지 확인하고 Codex를 완전히 종료했다가 다시 시작한다.
+이전 53개 Base를 설치한 사용자에게는 재실행만으로 기존 스킬 디렉터리가 삭제되지 않는다. 개인 수정 내역과 다른 설치의 소유권을 확인한 뒤 이전 스킬을 별도로 정리한다. 다른 사용자 스킬이 없는 깨끗한 설치 환경에서는 아래 결과가 `11`인지 확인하고 Codex를 완전히 종료했다가 다시 시작한다.
 
 ```bash
 find "$HOME/.agents/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l
@@ -46,7 +79,7 @@ find "$HOME/.agents/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l
 
 ## 프로젝트 스택
 
-위에서 Base만 설치한 다음, 설치할 프로젝트 루트에서 현재 프로젝트에 필요한 스택 래퍼만 실행한다.
+통합 49개 대신 공통 11개만 설치한 환경에서, 특정 프로젝트에 필요한 역할 스킬만 추가할 때 아래 스택 래퍼를 실행한다.
 
 | 스택 | Claude | Codex |
 |---|---|---|

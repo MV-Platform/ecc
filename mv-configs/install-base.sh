@@ -44,6 +44,11 @@ BASE_SKILLS=(
   security-review
   terminal-ops
   github-ops
+  git-workflow
+  error-handling
+  tdd-workflow
+  verification-loop
+  continuous-learning-v2
 )
 
 GLOBAL_RULE_SOURCE="$SCRIPT_DIR/rules/global/git-commit-rules.md"
@@ -65,11 +70,7 @@ for source_dir in "${SOURCE_DIRS[@]}"; do
   fi
 done
 
-INSTALL_ARGS=(
-  --profile core
-  --without baseline:rules
-  --target claude
-)
+BASE_MODULES="platform-configs"
 
 CLAUDE_INSTALL_STATE="$HOME/.claude/ecc/install-state.json"
 RECORDED_HOOK_CONSENT="$(
@@ -84,10 +85,13 @@ if [[ "$NO_HOOKS" == true && "$RECORDED_HOOK_CONSENT" == "enabled" ]]; then
 fi
 
 if [[ "$ENABLE_HOOKS" == true || "$RECORDED_HOOK_CONSENT" == "enabled" ]]; then
-  INSTALL_ARGS+=(--enable-hooks)
+  BASE_MODULES+=",hooks-runtime"
+  HOOK_CONSENT_ARG="--enable-hooks"
 else
-  INSTALL_ARGS+=(--no-hooks)
+  HOOK_CONSENT_ARG="--no-hooks"
 fi
+
+INSTALL_ARGS=(--modules "$BASE_MODULES" --target claude "$HOOK_CONSENT_ARG")
 
 if [[ "$DRY_RUN" == true ]]; then
   INSTALL_ARGS+=(--dry-run)

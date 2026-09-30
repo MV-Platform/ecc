@@ -81,6 +81,7 @@
         "framework-language",
         "database",
         "workflow-quality",
+        "workflow-quality-legacy",
         "skill-unified-memory",
         "security",
         "research-apis",

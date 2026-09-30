@@ -452,8 +452,10 @@ function runTests() {
       includeComponentIds: ['skill:continuous-learning'],
       target: 'claude',
     });
-    assert.ok(plan.selectedModuleIds.includes('workflow-quality'),
-      'Should include workflow-quality module from skill:continuous-learning');
+    assert.ok(plan.selectedModuleIds.includes('workflow-quality-legacy'),
+      'Should include only the legacy module from skill:continuous-learning');
+    assert.ok(!plan.selectedModuleIds.includes('workflow-quality'),
+      'Legacy v1 should not pull in the default quality skills');
   })) passed++; else failed++;
 
   if (test('--with skill:continuous-learning-v2 installs only that skill module', () => {

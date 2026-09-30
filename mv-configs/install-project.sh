@@ -69,12 +69,13 @@ case "$STACK" in
       swift-actor-persistence
       swift-protocol-di-testing
       accessibility
+      ios-icon-gen
     )
     ;;
   react-native)
     STACK_NAME="React Native"
     RULE_PACKS+=(typescript react-native)
-    SKILLS+=(react-native-patterns)
+    SKILLS+=(react-native-patterns accessibility)
     ;;
   spring-kotlin)
     STACK_NAME="Spring Boot + Kotlin"
@@ -87,7 +88,6 @@ case "$STACK" in
       springboot-security
       kotlin-patterns
       kotlin-testing
-      kotlin-coroutines-flows
       jpa-patterns
       postgres-patterns
       database-migrations
@@ -103,6 +103,7 @@ case "$STACK" in
       api-design
       postgres-patterns
       database-migrations
+      redis-patterns
     )
     ;;
   django)
@@ -115,9 +116,11 @@ case "$STACK" in
       django-tdd
       django-verification
       django-security
+      django-celery
       api-design
       postgres-patterns
       database-migrations
+      redis-patterns
     )
     ;;
   infra)
@@ -126,6 +129,7 @@ case "$STACK" in
       deployment-patterns
       docker-patterns
       kubernetes-patterns
+      safety-guard
     )
     ;;
   *)

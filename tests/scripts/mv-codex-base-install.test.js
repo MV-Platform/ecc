@@ -118,8 +118,10 @@ if (test('fresh install excludes ECC repository-only Codex instructions', () => 
       fs.readdirSync(path.join(homeDir, '.agents', 'skills'), { withFileTypes: true })
         .filter(entry => entry.isDirectory())
         .length,
-      54
+      11
     );
+    assert.ok(fs.existsSync(path.join(homeDir, '.agents', 'skills', 'continuous-learning-v2', 'SKILL.md')));
+    assert.ok(!fs.existsSync(path.join(homeDir, '.agents', 'skills', 'continuous-learning')));
   } finally {
     fs.rmSync(homeDir, { recursive: true, force: true });
   }
@@ -273,7 +275,7 @@ if (test('base install rejects a hard-linked managed skill without changing its 
   }
 })) passed += 1; else failed += 1;
 
-if (test('base install rejects a hard-linked upstream core skill destination', () => {
+if (test('base install preserves an unowned hard-linked upstream core skill', () => {
   if (process.platform === 'win32') return;
 
   const homeDir = createTempHome();
@@ -293,12 +295,10 @@ if (test('base install rejects a hard-linked upstream core skill destination', (
     fs.linkSync(externalFile, targetFile);
 
     const result = runInstaller(homeDir);
-    assert.notStrictEqual(result.status, 0);
-    assert.ok(result.stderr.includes('hard link'), result.stderr || result.stdout);
-    assert.ok(result.stderr.includes(targetFile), result.stderr || result.stdout);
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
     assert.strictEqual(fs.readFileSync(externalFile, 'utf8'), externalContent);
     assert.strictEqual(fs.statSync(externalFile).nlink, 2);
-    assert.ok(!fs.existsSync(path.join(homeDir, '.codex', 'ecc-install-state.json')));
+    assert.ok(fs.existsSync(path.join(homeDir, '.codex', 'ecc-install-state.json')));
   } finally {
     fs.rmSync(homeDir, { recursive: true, force: true });
     fs.rmSync(externalDir, { recursive: true, force: true });

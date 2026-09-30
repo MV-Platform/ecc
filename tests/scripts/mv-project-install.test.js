@@ -46,11 +46,12 @@ const stacks = {
       'swift-actor-persistence',
       'swift-protocol-di-testing',
       'accessibility',
+      'ios-icon-gen',
     ],
   },
   'react-native': {
     rules: ['common', 'typescript', 'react-native'],
-    skills: ['react-native-patterns'],
+    skills: ['react-native-patterns', 'accessibility'],
   },
   'spring-kotlin': {
     rules: ['common', 'kotlin'],
@@ -62,7 +63,6 @@ const stacks = {
       'springboot-security',
       'kotlin-patterns',
       'kotlin-testing',
-      'kotlin-coroutines-flows',
       'jpa-patterns',
       'postgres-patterns',
       'database-migrations',
@@ -77,6 +77,7 @@ const stacks = {
       'api-design',
       'postgres-patterns',
       'database-migrations',
+      'redis-patterns',
     ],
   },
   django: {
@@ -88,14 +89,16 @@ const stacks = {
       'django-tdd',
       'django-verification',
       'django-security',
+      'django-celery',
       'api-design',
       'postgres-patterns',
       'database-migrations',
+      'redis-patterns',
     ],
   },
   infra: {
     rules: ['common'],
-    skills: ['deployment-patterns', 'docker-patterns', 'kubernetes-patterns'],
+    skills: ['deployment-patterns', 'docker-patterns', 'kubernetes-patterns', 'safety-guard'],
   },
 };
 

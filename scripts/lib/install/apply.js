@@ -11,7 +11,7 @@ const {
 const { readInstallState, writeInstallState } = require('../install-state');
 const {
   assertHookConsentReady,
-  disableOpenCodeHookPluginRegistration,
+  parseJsoncConfig,
   getDisabledOpenCodePluginContent,
   getRecordedHookConsent,
   getOpenCodeActivationPathKind,
@@ -50,27 +50,18 @@ const {
   completeExcludedPathsReconciliation,
   prepareExcludedPathsReconciliation,
 } = require('./excluded-paths-reconciliation');
+const {
+  completeStaleOperationsReconciliation,
+  describeStaleOperationsPreview,
+  prepareStaleOperationsReconciliation,
+  withoutStaleOperations,
+} = require('./stale-operations-reconciliation');
 const { buildInstallIndex, rewriteRelativeLinks } = require('./link-rewrite');
-const { adaptAntigravityAgent } = require('./antigravity-agent');
+const { transformInstallContent } = require('./content-transform');
+const { assertScriptBoundary, isScriptBoundary } = require('./opencode-script-boundary');
 
 function isMarkdownPath(filePath) {
   return /\.(md|mdx|markdown)$/i.test(String(filePath || ''));
-}
-
-function transformInstallContent(operation, content) {
-  if (!operation.contentTransform) {
-    return content;
-  }
-  if (operation.contentTransform === 'antigravity-agent-frontmatter') {
-    return adaptAntigravityAgent(content, operation.sourceRelativePath);
-  }
-  if (operation.contentTransform === 'opencode-disable-ecc-hooks') {
-    return disableOpenCodeHookPluginRegistration(content, operation.sourceRelativePath);
-  }
-  if (operation.contentTransform === 'opencode-disable-plugin-entrypoint') {
-    return getDisabledOpenCodePluginContent();
-  }
-  throw new Error(`Unknown install content transform: ${operation.contentTransform}`);
 }
 
 // Map every copy-file operation to { sourceRel, destRel } so relative links in
@@ -305,6 +296,22 @@ function readPreviousInstallState(plan) {
   return readInstallState(plan.installStatePath);
 }
 
+function assertOpenCodeScriptBoundary(plan, writtenDestinations = new Set()) {
+  if (!plan.operations.some(operation => isScriptBoundary(operation, plan.targetRoot))) return;
+  assertSafeInstallOperation(plan, { destinationPath: plan.installStatePath });
+  assertScriptBoundary(plan, {
+    readFile: destinationPath => readInstalledFileNoFollow(plan, { destinationPath }),
+    previousOperations: readPreviousInstallState(plan)?.operations || [],
+    writtenDestinations,
+    expectedContent(operation) {
+      if (!operation || operation.kind !== 'copy-file') return null;
+      const source = fs.readFileSync(operation.sourcePath);
+      return operation.contentTransform
+        ? Buffer.from(transformInstallContent(operation, source.toString('utf8'))) : source;
+    },
+  });
+}
+
 function comparablePath(filePath) {
   const resolved = path.resolve(filePath);
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
@@ -444,9 +451,16 @@ function activationIsInactive(kind, operation, content) {
     return content.toString('utf8') === getDisabledOpenCodePluginContent();
   }
   const text = content.toString('utf8');
-  // Validate first so malformed JSON retains its source context.
-  disableOpenCodeHookPluginRegistration(text, operation.sourceRelativePath || operation.destinationPath);
-  const config = JSON.parse(text);
+  const relativePath = operation.sourceRelativePath || operation.destinationPath;
+  // JSONC-tolerant parse so a comment in the user's config does not crash
+  // the install; the ownership guard never writes this file (issue #3546).
+  const config = parseJsoncConfig(text, relativePath);
+  // Keep the same shape error the strict parser surfaced via
+  // disableOpenCodeHookPluginRegistration: a non-array plugin must not
+  // silently count as inactive.
+  if (config.plugin !== undefined && !Array.isArray(config.plugin)) {
+    throw new Error(`Invalid ${relativePath}: plugin must be an array`);
+  }
   return !Array.isArray(config.plugin) || !config.plugin.includes('./plugins');
 }
 
@@ -686,11 +700,28 @@ function prepareHookConsentMigration(plan, migration) {
   };
 }
 
+function preflightQwenAgentOperations(plan) {
+  for (const operation of plan.operations || []) {
+    if (operation.kind === 'copy-file' && operation.contentTransform === 'qwen-agent-frontmatter') {
+      assertSafeInstallOperation(plan, operation);
+      if (!fs.lstatSync(operation.sourcePath).isFile()) {
+        throw new Error('Refusing Qwen agent adaptation from a non-regular source file');
+      }
+      transformInstallContent(operation, fs.readFileSync(operation.sourcePath, 'utf8'));
+    }
+  }
+}
+
 function previewInstallPlan(plan) {
+  preflightQwenAgentOperations(plan);
+  assertOpenCodeScriptBoundary(plan);
   assertOpenCodeHookDeactivationReady(plan);
-  const migration = prepareHookConsentMigration(
+  const migration = prepareStaleOperationsReconciliation(
     plan,
-    prepareUserOwnedFileGuard(plan, prepareClaudeSkillMigration(plan))
+    prepareHookConsentMigration(
+      plan,
+      prepareUserOwnedFileGuard(plan, prepareClaudeSkillMigration(plan))
+    )
   );
   const appliedPlan = {
     ...plan,
@@ -702,7 +733,7 @@ function previewInstallPlan(plan) {
     : [];
   return {
     ...plan,
-    statePreview: migration.finalState,
+    statePreview: withoutStaleOperations(migration.finalState, migration),
     plannedOperations: [...plan.operations],
     operations: migration.appliedOperations,
     skippedOperations: migration.skippedOperations,
@@ -710,6 +741,7 @@ function previewInstallPlan(plan) {
       ...(Array.isArray(plan.warnings) ? plan.warnings : []),
       ...migration.warnings,
       ...hookConsentWarnings,
+      ...describeStaleOperationsPreview(migration),
     ],
     applied: false,
   };
@@ -717,6 +749,8 @@ function previewInstallPlan(plan) {
 
 function applyInstallPlan(plan, dependencies = {}) {
   assertHookConsentReady(plan);
+  // Reject conflicts before locks can create any target directories/files.
+  assertOpenCodeScriptBoundary(plan);
   if (plan.adapter?.target === 'opencode') {
     assertSafeInstallOperation(plan, { destinationPath: plan.installStatePath });
     return withOpenCodeInstallLocks(
@@ -742,6 +776,7 @@ function applyInstallPlan(plan, dependencies = {}) {
 }
 
 function applyInstallPlanLocked(plan, dependencies = {}, settingsLockHeld = false) {
+  preflightQwenAgentOperations(plan);
   const persistInstallState = dependencies.writeInstallState || writeInstallState;
   const beforeInstallStateRead = dependencies.beforeInstallStateRead;
   const beforeOperationWrite = dependencies.beforeOperationWrite;
@@ -749,14 +784,18 @@ function applyInstallPlanLocked(plan, dependencies = {}, settingsLockHeld = fals
   if (typeof beforeInstallStateRead === 'function') {
     beforeInstallStateRead({ plan });
   }
+  assertOpenCodeScriptBoundary(plan);
   assertOpenCodeLeaseCoverage(plan, dependencies.opencodeLease);
   const legacyActivation = inspectLegacyOpenCodeDeactivation(plan);
   const activationSnapshot = assertOpenCodeHookDeactivationReady(plan);
-  const migration = prepareExcludedPathsReconciliation(
+  const migration = prepareStaleOperationsReconciliation(
     plan,
-    prepareHookConsentMigration(
+    prepareExcludedPathsReconciliation(
       plan,
-      prepareUserOwnedFileGuard(plan, prepareClaudeSkillMigration(plan))
+      prepareHookConsentMigration(
+        plan,
+        prepareUserOwnedFileGuard(plan, prepareClaudeSkillMigration(plan))
+      )
     )
   );
   const appliedPlan = {
@@ -798,6 +837,9 @@ function applyInstallPlanLocked(plan, dependencies = {}, settingsLockHeld = fals
         beforeOperationWrite({ plan: appliedPlan, operation });
       }
       assertNoNewUserOwnedFile(migration, operation, appliedPlan);
+      if (operation.sourceRelativePath === 'manifests/install-assets/commonjs-scripts-package.json') {
+        assertOpenCodeScriptBoundary(appliedPlan, writtenDestinations);
+      }
       assertOpenCodeActivationUnchanged(appliedPlan, operation, activationSnapshot);
 
       if (
@@ -918,10 +960,14 @@ function applyInstallPlanLocked(plan, dependencies = {}, settingsLockHeld = fals
         );
       }
 
-      // Include preserved user configs omitted from the write plan: they must
-      // still be inactive before we record a completed install.
+      // Preserve main's activation safety gate before publishing ownership.
       assertOpenCodeHookDeactivationReady(plan, { requireInactive: true });
-      finalState = stateWithContentDigests(migration.finalState, appliedPlan);
+      // Stale records leave only the successful final state; the bridge and
+      // failure checkpoint above keep them so a failed install retains ownership.
+      finalState = stateWithContentDigests(
+        withoutStaleOperations(migration.finalState, migration),
+        appliedPlan
+      );
       if (typeof beforeInstallStateWrite === 'function') {
         beforeInstallStateWrite({ plan: appliedPlan, state: finalState });
       }
@@ -1010,6 +1056,18 @@ function applyInstallPlanLocked(plan, dependencies = {}, settingsLockHeld = fals
     ];
   }
 
+  let stalePathsRemoved = [];
+  let stalePathsWarnings = [];
+  try {
+    const staleReconciliation = completeStaleOperationsReconciliation(migration, appliedPlan);
+    stalePathsRemoved = staleReconciliation.removedPaths;
+    stalePathsWarnings = staleReconciliation.warnings;
+  } catch (error) {
+    stalePathsWarnings = [
+      `Stale install-state reconciliation did not finish: ${error.message}. Files ECC no longer installs were preserved; remove them manually if unwanted.`,
+    ];
+  }
+
     return {
       ...plan,
       statePreview: finalState,
@@ -1017,12 +1075,14 @@ function applyInstallPlanLocked(plan, dependencies = {}, settingsLockHeld = fals
       operations: migration.appliedOperations,
       skippedOperations: migration.skippedOperations,
       reconciledExcludedPaths: excludedPathsRemoved,
+      reconciledStalePaths: stalePathsRemoved,
       warnings: [
         ...(Array.isArray(plan.warnings) ? plan.warnings : []),
         ...migration.warnings,
         ...antigravityMigrationWarnings,
         ...opencodeMigrationWarnings,
         ...excludedPathsWarnings,
+        ...stalePathsWarnings,
       ],
       applied: true,
     };
@@ -1030,6 +1090,7 @@ function applyInstallPlanLocked(plan, dependencies = {}, settingsLockHeld = fals
 
 module.exports = {
   applyInstallPlan,
+  assertOpenCodeScriptBoundary,
   assertOpenCodeActivationUnchanged,
   assertOpenCodeLeaseCoverage,
   assertOpenCodeHookDeactivationReady,

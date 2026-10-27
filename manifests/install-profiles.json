@@ -75,6 +75,7 @@
       "modules": [
         "rules-core",
         "agents-core",
+        "shared-script-utils",
         "commands-core",
         "hooks-runtime",
         "platform-configs",
@@ -82,6 +83,7 @@
         "database",
         "workflow-quality",
         "workflow-quality-legacy",
+        "documentation-governance",
         "skill-unified-memory",
         "security",
         "research-apis",
@@ -100,7 +102,11 @@
         "devops-infra",
         "machine-learning",
         "supply-chain-domain",
-        "document-processing"
+        "document-processing",
+        "documentation-context",
+        "hermes-hooks",
+        "documentation-change-impact",
+        "documentation-test-regression"
       ]
     }
   }

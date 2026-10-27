@@ -1,6 +1,6 @@
 ---
 name: safety-guard
-description: "Guard against destructive operations with three modes: Careful intercepts dangerous commands (rm -rf, git push --force, DROP TABLE) for confirmation, Freeze locks writes to one directory, and Guard combines both via PreToolUse hooks. Use when working on production systems, running agents autonomously, restricting edits to a directory, or during migrations, deploys, and data changes."
+description: "Guard against destructive operations with three modes: Careful intercepts dangerous commands (rm -rf, git push --force, DROP TABLE) for confirmation, Freeze locks writes to one directory, and Guard combines both. Advisory: the agent applies these rules itself; no hook ships with it. Use when working on production systems, running agents autonomously, restricting edits to a directory, or during migrations, deploys, and data changes."
 metadata:
   origin: ECC
 ---
@@ -14,20 +14,13 @@ metadata:
 - When you want to restrict edits to a specific directory
 - During sensitive operations (migrations, deploys, data changes)
 
-## Scope
+## How It Works
 
-This skill provides review guidance for the modes below. It does not include a
-`/safety-guard` command or a PreToolUse hook that enforces them. Treat directory
-limits as instructions unless a separate, tested enforcement mechanism is
-configured. Do not claim that a command was blocked by this skill.
-
-## How to Use the Guidance
-
-Three modes of protection:
+Three modes of protection. They are instructions the agent follows, not enforced blocks (see [Enforcement](#enforcement)).
 
 ### Mode 1: Careful Mode
 
-Review destructive commands before execution and warn about:
+Before it runs a destructive command, the agent stops and warns:
 
 ```
 Watched patterns:
@@ -44,40 +37,29 @@ Watched patterns:
 - Any command with --no-verify
 ```
 
-When detected: explain what the command does, ask for confirmation, and suggest
-a safer alternative.
+When detected: shows what the command does, asks for confirmation, suggests safer alternative.
 
 ### Mode 2: Freeze Mode
 
-Limit planned file edits to a specific directory tree:
+Locks file edits to a specific directory tree, for example: "freeze edits to `src/components/`".
 
-```
-Apply freeze guidance to src/components/
-```
-
-Review each proposed Write/Edit against `src/components/`. A separate hook or
-policy is required to block writes outside that directory automatically.
+The agent does not Write/Edit outside `src/components/`, and explains why when a change would need it. Useful when you want an agent to focus on one area without touching unrelated code.
 
 ### Mode 3: Guard Mode (Careful + Freeze combined)
 
-Both protections active. Maximum safety for autonomous agents.
+Both protections active, for example: "guard mode, write only to `src/api/`, read anything".
 
-```
-Apply guard guidance to src/api/ while allowing reads elsewhere
-```
-
-Review writes against `src/api/` and review destructive commands everywhere.
-Automatic blocking requires a separate hook or policy.
+The agent can read anything but only writes to `src/api/`, and asks before any destructive command.
 
 ### Unlock
 
-```
-Stop applying the freeze or guard guidance
-```
+Tell the agent to stop applying the rules.
 
 ## Enforcement
 
-The ECC repository does not bundle a PreToolUse hook or slash command for this
-skill. Installing or invoking it does not enable automatic command blocking,
-directory confinement, or a `~/.claude/safety-guard.log` audit log. Configure
-and test those controls separately if required for production work.
+This skill is advisory. ECC ships no `/safety-guard` command and no hook for it, so nothing blocks a tool call that breaks these rules. For blocking that does not depend on the agent, use Claude Code [permission deny rules](https://code.claude.com/docs/en/permissions) (for example `Bash(rm -rf *)`) or a [PreToolUse hook](https://code.claude.com/docs/en/hooks).
+
+## Integration
+
+- Enable by default for `codex -a never` sessions
+- Pair with observability risk scoring in ECC 2.0
